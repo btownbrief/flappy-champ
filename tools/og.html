@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- Renders the og:image (1200x630) and apple-touch icon (180x180) using the
+     game's own art code. Serve the repo locally and screenshot with headless
+     Chrome at the matching window size:
+       chrome --headless --screenshot=og-image.png --window-size=1200,630 \
+         "http://localhost:8000/tools/og.html"
+       chrome --headless --screenshot=icon-180.png --window-size=180,180 \
+         "http://localhost:8000/tools/og.html?icon" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>html,body{margin:0;overflow:hidden;background:#0e2238}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+import { drawChamp } from '../js/champ.js';
+import { palette, drawBackdrop, drawWater } from '../js/scenery.js';
+import { drawBottomBoat, drawTopSail, VARIANTS } from '../js/boats.js';
+
+const icon = location.search.includes('icon');
+const W = icon ? 180 : 1200, H = icon ? 180 : 630;
+const c = document.getElementById('c');
+c.width = W; c.height = H;
+const ctx = c.getContext('2d');
+
+const pal = palette(0.38); // golden hour drifting to sunset
+const horizon = H * 0.5, waterY = H * 0.88;
+drawBackdrop(ctx, W, H, horizon, 120, pal, 0);
+drawWater(ctx, W, H, horizon, 120, pal, 0);
+
+if (icon) {
+  drawChamp(ctx, W * 0.58, H * 0.5, 30, -0.12, 0, 0.6, false);
+} else {
+  drawTopSail(ctx, W * 0.78, 52, H * 0.24, VARIANTS[1], 0);
+  drawBottomBoat(ctx, W * 0.78, 52, H * 0.62, waterY, VARIANTS[1], 0);
+  drawBottomBoat(ctx, W * 0.13, 40, H * 0.66, waterY, VARIANTS[0], 400);
+  drawChamp(ctx, W * 0.46, H * 0.44, 46, -0.1, 0, 0.55, false);
+
+  // wordmark
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#f2a24a';
+  ctx.font = '900 44px Arial, sans-serif';
+  ctx.save();
+  ctx.shadowColor = 'rgba(14,34,56,0.9)'; ctx.shadowOffsetY = 3; ctx.shadowBlur = 2;
+  ctx.fillText('F L A P P Y', W * 0.46, H * 0.65);
+  ctx.font = '900 120px Arial, sans-serif';
+  ctx.lineWidth = 10; ctx.strokeStyle = '#0e2238';
+  ctx.strokeText('CHAMP', W * 0.46, H * 0.83);
+  ctx.fillStyle = '#3fa860';
+  ctx.fillText('CHAMP', W * 0.46, H * 0.83);
+  ctx.restore();
+  ctx.fillStyle = '#f6efdc';
+  ctx.font = '600 26px Arial, sans-serif';
+  ctx.fillText('A Btown Games production · btownbrief.com', W * 0.46, H * 0.94);
+}
+document.title = 'ready';
+</script>
+</body>
+</html>
