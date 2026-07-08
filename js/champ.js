@@ -19,30 +19,15 @@ export const CHAMP = {
   cheek: '#f2a24a',
 };
 
-// sample a chain of two quadratic curves, then fill it as a tapered ribbon
-// (width w0 at the start easing to w1 at the end) — gives the neck a smooth
-// organic taper instead of a sausage stroke
-function taperedCurve(ctx, p0, c1, p1, c2, p2, w0, w1, color) {
-  const N = 16;
-  const pts = [];
-  for (let i = 0; i <= N; i++) {
-    const t = i / N;
-    let a, b, c, tt;
-    if (t < 0.5) { a = p0; b = c1; c = p1; tt = t * 2; }
-    else { a = p1; b = c2; c = p2; tt = (t - 0.5) * 2; }
-    const m = 1 - tt;
-    pts.push([
-      m * m * a[0] + 2 * m * tt * b[0] + tt * tt * c[0],
-      m * m * a[1] + 2 * m * tt * b[1] + tt * tt * c[1],
-    ]);
-  }
+// fill a polyline as a smooth ribbon whose width varies point to point —
+// this is how the whole body stays one connected organic shape
+function ribbon(ctx, pts, widths, color) {
   const left = [], right = [];
   for (let i = 0; i < pts.length; i++) {
     const A = pts[Math.max(0, i - 1)], B = pts[Math.min(pts.length - 1, i + 1)];
-    let dx = B[0] - A[0], dy = B[1] - A[1];
+    const dx = B[0] - A[0], dy = B[1] - A[1];
     const L = Math.hypot(dx, dy) || 1;
-    const t = i / (pts.length - 1);
-    const w = (w0 + (w1 - w0) * t) / 2;
+    const w = widths[i] / 2;
     left.push([pts[i][0] - dy / L * w, pts[i][1] + dx / L * w]);
     right.push([pts[i][0] + dy / L * w, pts[i][1] - dx / L * w]);
   }
@@ -53,6 +38,26 @@ function taperedCurve(ctx, p0, c1, p1, c2, p2, w0, w1, color) {
   for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i][0], right[i][1]);
   ctx.closePath();
   ctx.fill();
+}
+
+// sample a chain of two quadratic curves, then fill it as a tapered ribbon
+// (width w0 at the start easing to w1 at the end)
+function taperedCurve(ctx, p0, c1, p1, c2, p2, w0, w1, color) {
+  const N = 16;
+  const pts = [], widths = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    let a, b, c, tt;
+    if (t < 0.5) { a = p0; b = c1; c = p1; tt = t * 2; }
+    else { a = p1; b = c2; c = p2; tt = (t - 0.5) * 2; }
+    const m = 1 - tt;
+    pts.push([
+      m * m * a[0] + 2 * m * tt * b[0] + tt * tt * c[0],
+      m * m * a[1] + 2 * m * tt * b[1] + tt * tt * c[1],
+    ]);
+    widths.push(w0 + (w1 - w0) * t);
+  }
+  ribbon(ctx, pts, widths, color);
   return pts;
 }
 
@@ -64,42 +69,41 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   const wob = Math.sin(time * 0.006);      // gentle idle wobble
   const B = CHAMP.body, BD = CHAMP.bodyDark, BL = CHAMP.belly;
 
-  // ---- trailing humps (the classic three-bump silhouette) ----
-  // Same body green all the way back, bobbing gently out of phase, with a
-  // soft dark shading arc on top so they read as one continuous body.
-  const humps = [];
-  for (let i = 2; i >= 0; i--) {
-    const hx = -s * (1.35 + i * 1.02);
-    const hy = s * (0.55 + Math.sin(time * 0.006 + i * 1.9) * 0.06);
-    const hr = s * (0.8 - i * 0.15);
-    humps[i] = [hx, hy, hr];
-    ctx.fillStyle = B;
-    ctx.beginPath();
-    ctx.arc(hx, hy, hr, Math.PI, 0);
-    ctx.closePath();
-    ctx.fill();
-    // darker green along the top of the back
-    ctx.fillStyle = BD;
-    ctx.beginPath();
-    ctx.arc(hx, hy, hr, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.arc(hx, hy + hr * 0.28, hr * 0.82, Math.PI * 1.85, Math.PI * 1.15, true);
-    ctx.closePath();
-    ctx.fill();
-    // waterline shading under each hump
-    ctx.fillStyle = 'rgba(0,0,0,0.10)';
-    ctx.beginPath();
-    ctx.ellipse(hx, hy, hr, hr * 0.16, 0, 0, 7);
-    ctx.fill();
+  // ---- one continuous body: an undulating tapered spine, tail → chest ----
+  // A traveling sine wave gives the classic serpent humps while keeping the
+  // whole body a single connected shape, in the air or in the water.
+  const M = 24;
+  const spine = [], widths = [];
+  const ph = time * 0.005;
+  for (let i = 0; i <= M; i++) {
+    const t = i / M;
+    const bx = -s * (4.0 - 2.8 * t);          // tail tip → chest
+    const amp = s * 0.3 * (1 - t * t);        // wave dies out at the chest
+    const by = s * 0.5 + Math.sin(t * Math.PI * 2.2 - ph) * amp;
+    spine.push([bx, by]);
+    widths.push(s * (0.3 + 0.95 * Math.pow(t, 0.75)));
   }
+  ribbon(ctx, spine, widths, B);
 
-  // tail fin flicking up behind the last hump
-  const tx = -s * 4.1, ty = s * 0.45;
+  // darker green running along the whole back
+  const backPts = spine.map(([px, py], i) => [px, py - widths[i] * 0.3]);
+  ribbon(ctx, backPts, widths.map((w) => w * 0.36), BD);
+
+  // cream belly along the underside of the rear body (fades in mid-body,
+  // meets the neck belly at the chest)
+  const bi = Math.round(M * 0.35);
+  const bellyBody = spine.slice(bi).map(([px, py], i) => [px, py + widths[bi + i] * 0.28]);
+  ribbon(ctx, bellyBody, widths.slice(bi).map((w) => w * 0.4), BL);
+
+  // tail fin, attached at the spine's tail tip and following its swing
+  const [tx, ty] = spine[0];
+  const tailAng = Math.atan2(spine[1][1] - ty, spine[1][0] - tx);
   ctx.fillStyle = BD;
   ctx.save();
   ctx.translate(tx, ty);
-  ctx.rotate(-0.5 + wob * 0.12);
+  ctx.rotate(tailAng + Math.PI - 2.65 + wob * 0.12);
   ctx.beginPath();
-  ctx.moveTo(0, 0);
+  ctx.moveTo(s * 0.12, 0.1 * s);
   ctx.quadraticCurveTo(-s * 0.75, -s * 0.35, -s * 0.95, -s * 1.05);
   ctx.quadraticCurveTo(-s * 0.45, -s * 0.75, -s * 0.28, -s * 0.72);
   ctx.quadraticCurveTo(-s * 0.28, -s * 0.28, 0.15 * s, -0.12 * s);
@@ -107,13 +111,13 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   ctx.fill();
   ctx.restore();
 
-  // ---- neck: smooth tapered sweep from the front hump up to the head ----
+  // ---- neck: smooth tapered sweep growing straight out of the chest ----
   taperedCurve(
     ctx,
-    [-s * 1.5, s * 0.55], [-s * 0.7, s * 0.35],
+    [-s * 1.45, s * 0.5], [-s * 0.7, s * 0.35],
     [-s * 0.28, -s * 0.05], [-s * 0.02, -s * 0.3],
     [s * 0.28, -s * 0.5],
-    s * 1.5, s * 0.85, B
+    s * 1.32, s * 0.85, B
   );
 
   // cream belly plates up the front of the neck
@@ -146,11 +150,11 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   const fl = Math.max(0, 1 - flapT);
   const flapAng = 0.85 - fl * 1.9 + wob * 0.06;
   ctx.save();
-  ctx.translate(-s * 0.95, s * 0.45);
+  ctx.translate(-s * 0.9, s * 0.28);   // rooted inside the chest
   ctx.rotate(flapAng);
   ctx.fillStyle = BD;
   ctx.beginPath();
-  ctx.ellipse(s * 0.55, 0, s * 0.66, s * 0.28, 0.15, 0, 7);
+  ctx.ellipse(s * 0.5, 0, s * 0.62, s * 0.27, 0.15, 0, 7);
   ctx.fill();
   ctx.restore();
 
@@ -244,14 +248,14 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   }
   ctx.restore(); // head
 
-  // rounded crest bumps continuing along the humps
+  // rounded crest bumps riding the spine's wave down the back
   ctx.fillStyle = CHAMP.scute;
-  for (let i = 0; i < 3; i++) {
-    const [hx2, hy2, hr2] = humps[i];
-    const sy2 = hy2 - hr2 * 0.97;
-    const sr2 = s * (0.18 - i * 0.035);
+  for (const t of [0.85, 0.6, 0.35, 0.12]) {
+    const i2 = Math.round(t * M);
+    const [px, py] = spine[i2];
+    const sr2 = s * (0.09 + t * 0.1);
     ctx.beginPath();
-    ctx.ellipse(hx2, sy2, sr2, sr2 * 0.8, 0, Math.PI, 0);
+    ctx.ellipse(px, py - widths[i2] * 0.48, sr2, sr2 * 0.8, 0, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
   }

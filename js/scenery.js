@@ -20,36 +20,37 @@ function lerpRGB(a, b, t) {
 }
 
 // One full day, looping: noon → golden hour → sunset → dusk → night → dawn.
+// `hor` is the color right at the waterline — where a real sunset burns hottest.
 const STOPS = [
   { // noon
-    top: '#3f9fd4', mid: '#7cc4e8', low: '#c8e8f4', sun: '#fff6d0', sunH: 0.85,
+    top: '#3f9fd4', mid: '#7cc4e8', low: '#c8e8f4', hor: '#e2f3f9', sun: '#fff6d0', sunH: 0.85,
     far: '#8aa7cc', near: '#6188b4', water: '#3d85b2', deep: '#1e5d8a',
     silh: '#3c5a74', wave: '#bfe6f2', cloud: '#ffffff', stars: 0,
   },
-  { // golden hour
-    top: '#4f97cc', mid: '#a3c4e0', low: '#ffd9a0', sun: '#ffe291', sunH: 0.45,
-    far: '#8f97c2', near: '#6a74a4', water: '#4a80ae', deep: '#2a5586',
-    silh: '#44506f', wave: '#ffe6b8', cloud: '#ffeed8', stars: 0,
+  { // golden hour — the sky starts to catch fire
+    top: '#4884c2', mid: '#e09a6e', low: '#ffb84e', hor: '#ffcf72', sun: '#ffe088', sunH: 0.45,
+    far: '#8f80ae', near: '#6a628e', water: '#4e7aac', deep: '#2a5586',
+    silh: '#443c62', wave: '#ffd9a0', cloud: '#ffddb0', stars: 0,
   },
-  { // sunset (the Burlington special)
-    top: '#7d6bb0', mid: '#e08a96', low: '#ff9d5e', sun: '#ffb45a', sunH: 0.10,
-    far: '#7a6899', near: '#584b7c', water: '#5a6ea6', deep: '#33406e',
-    silh: '#3a3457', wave: '#ffb98a', cloud: '#f4b8a0', stars: 0,
+  { // sunset (the Burlington special) — blazing orange and red
+    top: '#54489c', mid: '#e8606a', low: '#ff8124', hor: '#ff6224', sun: '#ffca55', sunH: 0.10,
+    far: '#84588a', near: '#5e4270', water: '#6b64a8', deep: '#38386e',
+    silh: '#3c2c50', wave: '#ffab6e', cloud: '#ff8a62', stars: 0,
   },
-  { // dusk
-    top: '#33406e', mid: '#5c5488', low: '#c2688a', sun: '#ff9e70', sunH: -0.12,
-    far: '#4a4470', near: '#37335a', water: '#3a4a7c', deep: '#222c52',
-    silh: '#262844', wave: '#8a7aa8', cloud: '#6a628e', stars: 0.35,
+  { // dusk — embers on the horizon
+    top: '#343070', mid: '#6e4c8e', low: '#e06048', hor: '#c04844', sun: '#ff8450', sunH: -0.12,
+    far: '#4a3e6e', near: '#362e58', water: '#42447c', deep: '#242850',
+    silh: '#282242', wave: '#c8829c', cloud: '#a05e74', stars: 0.35,
   },
   { // night
-    top: '#0e1832', mid: '#1c2a4e', low: '#2c3c66', sun: '#e8ecf4', sunH: 0.55,
+    top: '#0e1832', mid: '#1c2a4e', low: '#2c3c66', hor: '#33436e', sun: '#e8ecf4', sunH: 0.55,
     far: '#243252', near: '#1a2540', water: '#1c2c50', deep: '#0e1a36',
     silh: '#131c32', wave: '#4a5e8a', cloud: '#2c3a5e', stars: 1,
   },
   { // dawn
-    top: '#4a6296', mid: '#9a8cb0', low: '#ffc2a0', sun: '#ffd9a8', sunH: 0.06,
+    top: '#4a6296', mid: '#9a80ac', low: '#ffab72', hor: '#ff9860', sun: '#ffd9a8', sunH: 0.06,
     far: '#6a7099', near: '#4c547e', water: '#3e6494', deep: '#24406c',
-    silh: '#33415e', wave: '#d8c2b0', cloud: '#d8b8c2', stars: 0.1,
+    silh: '#33415e', wave: '#ecbc9c', cloud: '#e0a8a8', stars: 0.1,
   },
 ];
 
@@ -128,11 +129,12 @@ function drawPoint(ctx, x, y, u, color, seed, wMul = 1) {
 // Everything above the water: sky, sun/moon, stars, clouds, Adirondacks,
 // and the low treed points across the lake. horizon = y of the far waterline.
 export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
-  // sky
+  // sky — four stops so the band right at the water burns hottest
   const sky = ctx.createLinearGradient(0, 0, 0, horizon);
   sky.addColorStop(0, pal.top);
-  sky.addColorStop(0.62, pal.mid);
-  sky.addColorStop(1, pal.low);
+  sky.addColorStop(0.52, pal.mid);
+  sky.addColorStop(0.84, pal.low);
+  sky.addColorStop(1, pal.hor);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, horizon + 1);
 
@@ -153,15 +155,17 @@ export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
   const sunX = W * 0.68;
   const sunY = horizon - pal.sunH * horizon * 0.85;
   if (pal.sunH > -0.2) {
-    const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, W * 0.3);
+    // glow swells as the sun drops — a low sun sets the whole sky ablaze
+    const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, W * (0.3 + pal.glow * 0.14));
     glow.addColorStop(0, pal.sun);
-    glow.addColorStop(1, 'rgba(255,200,120,0)');
-    ctx.globalAlpha = 0.5;
+    glow.addColorStop(0.4, `rgba(255,140,60,${0.35 * pal.glow})`);
+    glow.addColorStop(1, 'rgba(255,110,50,0)');
+    ctx.globalAlpha = 0.5 + pal.glow * 0.25;
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, horizon);
     ctx.globalAlpha = 1;
     ctx.fillStyle = pal.sun;
-    ctx.beginPath(); ctx.arc(sunX, sunY, Math.min(W, 800) * 0.045, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(sunX, sunY, Math.min(W, 800) * (0.045 + pal.glow * 0.012), 0, 7); ctx.fill();
   }
 
   // clouds: soft three-lobe puffs drifting slowly, streaked like a lake sunset
@@ -180,13 +184,13 @@ export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
   }
   // long flat sunset bands low in the sky
   if (pal.glow > 0.05) {
-    ctx.globalAlpha = 0.35 * pal.glow;
-    for (let i = 0; i < 3; i++) {
-      const by = horizon * (0.58 + i * 0.11);
+    ctx.globalAlpha = 0.45 * pal.glow;
+    for (let i = 0; i < 5; i++) {
+      const by = horizon * (0.5 + i * 0.1);
       const bx = ((rand(i * 21.3) * (W + 400) + time * 0.004) % (W + 400)) - 200;
-      const bw = W * (0.3 + rand(i * 3.3) * 0.25);
+      const bw = W * (0.3 + rand(i * 3.3) * 0.3);
       ctx.beginPath();
-      ctx.ellipse(bx, by, bw / 2, 4 + i * 2, 0, 0, 7);
+      ctx.ellipse(bx, by, bw / 2, 4 + i * 2.2, 0, 0, 7);
       ctx.fill();
     }
   }
