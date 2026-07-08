@@ -210,6 +210,72 @@ export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
     drawPoint(ctx, bx + u * 9, horizon, u, pal.silh, k * 3 + 11, 1.25);
     drawPoint(ctx, bx + u * 34, horizon, u * 0.75, pal.silh, k * 5 + 3, 0.9);
   }
+
+  // tiny distant sails out on the broad lake, just off the horizon
+  const day = 1 - (pal.night || 0);
+  if (day > 0.3) {
+    ctx.fillStyle = pal.cloud;
+    ctx.globalAlpha = 0.85 * day;
+    const sPeriod = u * 22;
+    const ssOff = scroll * 0.12;
+    for (let k = Math.floor(ssOff / sPeriod) - 1; k * sPeriod - ssOff < W + sPeriod; k++) {
+      if (rand(k * 5.7) < 0.45) continue; // not every slot has a boat
+      const sx = k * sPeriod - ssOff + rand(k * 2.9) * sPeriod * 0.5;
+      const sh = u * (0.38 + rand(k * 8.3) * 0.25);
+      const lean = Math.sin(time * 0.0016 + k) * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(sx + lean, horizon - sh);
+      ctx.lineTo(sx - sh * 0.32, horizon - 1);
+      ctx.lineTo(sx + sh * 0.28, horizon - 1);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // the ferry, gliding steadily across toward Port Kent
+  const fu = Math.max(H * 0.02, 12);
+  const fSpan = W + fu * 14;
+  const fx = W + fu * 7 - ((scroll * 0.06 + time * 0.014) % fSpan);
+  ctx.fillStyle = pal.silh;
+  ctx.beginPath();
+  ctx.moveTo(fx - fu * 2.1, horizon);
+  ctx.lineTo(fx - fu * 1.8, horizon - fu * 0.5);
+  ctx.lineTo(fx + fu * 1.8, horizon - fu * 0.5);
+  ctx.lineTo(fx + fu * 2.1, horizon);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(fx - fu * 1.3, horizon - fu * 0.95, fu * 2.5, fu * 0.5);
+  ctx.fillRect(fx - fu * 0.75, horizon - fu * 1.25, fu * 1.4, fu * 0.34);
+  // deck windows glow after dark
+  if (pal.night > 0.15) {
+    ctx.fillStyle = `rgba(255,220,150,${0.85 * pal.night})`;
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(fx - fu * 1.15 + i * fu * 0.5, horizon - fu * 0.86, fu * 0.26, fu * 0.16);
+    }
+  }
+
+  // gulls wheeling over the water (they roost after dark)
+  if ((pal.night || 0) < 0.4) {
+    ctx.strokeStyle = pal.silh;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.8 * (1 - (pal.night || 0) * 2.2);
+    for (let i = 0; i < 3; i++) {
+      const span2 = W + 240;
+      const drift = scroll * 0.3 + time * (0.02 + rand(i * 3.7) * 0.014);
+      const gx = ((rand(i * 4.2) * span2 - drift) % span2 + span2) % span2 - 120;
+      const gy = horizon * (0.26 + rand(i * 8.8) * 0.3) + Math.sin(time * 0.0028 + i * 2.1) * 7;
+      const gw = 5.5 + rand(i * 2.2) * 3.5;
+      const flap = 0.35 + 0.55 * Math.abs(Math.sin(time * 0.011 + i * 2.7));
+      ctx.beginPath();
+      ctx.moveTo(gx - gw, gy - gw * flap * 0.7);
+      ctx.quadraticCurveTo(gx - gw * 0.35, gy + gw * 0.18, gx, gy);
+      ctx.quadraticCurveTo(gx + gw * 0.35, gy + gw * 0.18, gx + gw, gy - gw * flap * 0.7);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
 }
 
 // The lake itself, from the horizon to the bottom of the screen.
@@ -297,6 +363,25 @@ export function drawBreakwater(ctx, W, H, horizon, scroll, pal, time) {
     const x = k * period - sOff + period * 0.55;
     if (x < -u * 6 || x > W + u * 6) continue;
     const y = horizon + (H - horizon) * 0.12;  // waterline at the crib
+
+    // --- the long stone breakwater the light stands at the end of:
+    // a run of piled blocks, tops catching the light, sitting IN the water
+    const wallStart = x - u * 15, wallEnd = x - u * 1.1;
+    ctx.fillStyle = rock;
+    ctx.fillRect(wallStart, y - u * 0.08, wallEnd - wallStart, u * 0.2);
+    for (let i = 0; i < 26; i++) {
+      const wx = wallStart + (i / 25) * (wallEnd - wallStart);
+      const wr = u * (0.09 + rand(k * 31.7 + i) * 0.1);
+      ctx.fillStyle = i % 3 ? rock : rockLit;
+      ctx.beginPath();
+      ctx.ellipse(wx, y - u * 0.08, wr * 1.5, wr, 0, 0, 7);
+      ctx.fill();
+    }
+    // faint reflection under the wall
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = rock;
+    ctx.fillRect(wallStart, y + u * 0.16, wallEnd - wallStart, u * 0.14);
+    ctx.globalAlpha = 1;
 
     // --- stone crib / jetty: two rows of blocks, catching the light ---
     ctx.fillStyle = rock;
@@ -401,5 +486,68 @@ export function drawBreakwater(ctx, W, H, horizon, scroll, pal, time) {
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  // ---- sailboats swinging at their moorings inside the breakwater ----
+  // (like the fleet you see anchored off Waterfront Park)
+  const bu = Math.max(H * 0.032, 17);
+  const bPeriod = Math.max(W * 0.85, bu * 34);
+  const bOff = scroll * 0.42;
+  for (let k = Math.floor(bOff / bPeriod) - 1; k * bPeriod - bOff < W + bPeriod; k++) {
+    const base = k * bPeriod - bOff;
+    for (let j = 0; j < 3; j++) {
+      const sd = k * 17.3 + j * 5.1;
+      const bx = base + (0.08 + j * 0.32 + rand(sd) * 0.2) * bPeriod;
+      const depth = 0.26 + rand(sd * 1.7) * 0.3;           // how far down the water
+      const by = horizon + (H - horizon) * depth + Math.sin(time * 0.0014 + sd) * 2;
+      const sc = bu * (0.55 + depth * 1.1);                 // nearer = bigger
+      const heel = Math.sin(time * 0.0011 + sd * 2) * 0.05; // gentle sway
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(heel);
+      // hull with a proper freeboard so it reads as a boat, not a dash
+      ctx.fillStyle = white;
+      ctx.beginPath();
+      ctx.moveTo(-sc * 0.9, -sc * 0.34);
+      ctx.quadraticCurveTo(-sc * 0.82, sc * 0.1, -sc * 0.5, sc * 0.14);
+      ctx.lineTo(sc * 0.55, sc * 0.14);
+      ctx.quadraticCurveTo(sc * 0.92, sc * 0.08, sc * 0.98, -sc * 0.34);
+      ctx.closePath();
+      ctx.fill();
+      // low cabin
+      ctx.fillRect(-sc * 0.32, -sc * 0.56, sc * 0.6, sc * 0.24);
+      // dark waterline stripe
+      ctx.fillStyle = dark;
+      ctx.fillRect(-sc * 0.72, sc * 0.05, sc * 1.5, sc * 0.09);
+      // bare mast + forestay
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = Math.max(1, sc * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(sc * 0.08, -sc * 0.34);
+      ctx.lineTo(sc * 0.08, -sc * 1.8);
+      ctx.moveTo(sc * 0.08, -sc * 1.8);
+      ctx.lineTo(sc * 0.85, -sc * 0.3);
+      ctx.stroke();
+      ctx.restore();
+      // reflection smudge
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = white;
+      ctx.beginPath();
+      ctx.ellipse(bx, by + sc * 0.28, sc * 0.6, sc * 0.09, 0, 0, 7);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // a couple of little mooring buoys between the boats
+    for (let j = 0; j < 2; j++) {
+      const sd = k * 23.1 + j * 9.7;
+      const px = base + rand(sd) * bPeriod;
+      const py = horizon + (H - horizon) * (0.22 + rand(sd * 3.1) * 0.4) + Math.sin(time * 0.002 + sd) * 1.5;
+      const pr = 2 + rand(sd * 1.3) * 2;
+      ctx.fillStyle = j % 2 ? '#d05848' : white;
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, 7); ctx.fill();
+      ctx.globalAlpha = 0.2;
+      ctx.beginPath(); ctx.ellipse(px, py + pr * 2.2, pr * 1.4, pr * 0.4, 0, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 }

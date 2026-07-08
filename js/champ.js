@@ -95,13 +95,14 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   const bellyBody = spine.slice(bi).map(([px, py], i) => [px, py + widths[bi + i] * 0.28]);
   ribbon(ctx, bellyBody, widths.slice(bi).map((w) => w * 0.4), BL);
 
-  // tail fin, attached at the spine's tail tip and following its swing
+  // tail fin, anchored at the spine's tail tip — mostly holds its upswept
+  // pose, only gently nodding with the wave so it never pitches oddly
   const [tx, ty] = spine[0];
   const tailAng = Math.atan2(spine[1][1] - ty, spine[1][0] - tx);
   ctx.fillStyle = BD;
   ctx.save();
   ctx.translate(tx, ty);
-  ctx.rotate(tailAng + Math.PI - 2.65 + wob * 0.12);
+  ctx.rotate(-0.5 + tailAng * 0.35 + wob * 0.1);
   ctx.beginPath();
   ctx.moveTo(s * 0.12, 0.1 * s);
   ctx.quadraticCurveTo(-s * 0.75, -s * 0.35, -s * 0.95, -s * 1.05);
