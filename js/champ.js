@@ -1,6 +1,7 @@
-// FLAPPY CHAMP — Champ, the Lake Champlain monster, drawn entirely in code.
-// Friendly cartoon sea serpent: green body, cream belly, little humps trailing
-// behind, stubby flippers, long neck, big happy eye, spiky scutes down the neck.
+// FLAPPY CHAMP — Champ, the Lake Champlain monster, drawn entirely in code,
+// styled after the classic ECHO Center mascot art: friendly plesiosaur with a
+// smooth green body, darker green back, cream belly plates up the neck,
+// rounded crest bumps (no spikes), stubby flippers, and a big happy eye.
 //
 // drawChamp(ctx, x, y, s, tilt, time, flapT, dead)
 //   (x, y)  = center of the head/neck mass (the collision circle)
@@ -10,12 +11,50 @@
 //   dead    = true → X eyes and a worried mouth
 
 export const CHAMP = {
-  body: '#3fa860',
-  bodyDark: '#2e8149',
-  belly: '#f3e9c8',
-  scute: '#2a7d45',
+  body: '#54b06e',
+  bodyDark: '#379052',
+  belly: '#f4ecc9',
+  bellyLine: '#cdb98d',
+  scute: '#2e7d49',
   cheek: '#f2a24a',
 };
+
+// sample a chain of two quadratic curves, then fill it as a tapered ribbon
+// (width w0 at the start easing to w1 at the end) — gives the neck a smooth
+// organic taper instead of a sausage stroke
+function taperedCurve(ctx, p0, c1, p1, c2, p2, w0, w1, color) {
+  const N = 16;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    let a, b, c, tt;
+    if (t < 0.5) { a = p0; b = c1; c = p1; tt = t * 2; }
+    else { a = p1; b = c2; c = p2; tt = (t - 0.5) * 2; }
+    const m = 1 - tt;
+    pts.push([
+      m * m * a[0] + 2 * m * tt * b[0] + tt * tt * c[0],
+      m * m * a[1] + 2 * m * tt * b[1] + tt * tt * c[1],
+    ]);
+  }
+  const left = [], right = [];
+  for (let i = 0; i < pts.length; i++) {
+    const A = pts[Math.max(0, i - 1)], B = pts[Math.min(pts.length - 1, i + 1)];
+    let dx = B[0] - A[0], dy = B[1] - A[1];
+    const L = Math.hypot(dx, dy) || 1;
+    const t = i / (pts.length - 1);
+    const w = (w0 + (w1 - w0) * t) / 2;
+    left.push([pts[i][0] - dy / L * w, pts[i][1] + dx / L * w]);
+    right.push([pts[i][0] + dy / L * w, pts[i][1] - dx / L * w]);
+  }
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(left[0][0], left[0][1]);
+  for (const p of left) ctx.lineTo(p[0], p[1]);
+  for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i][0], right[i][1]);
+  ctx.closePath();
+  ctx.fill();
+  return pts;
+}
 
 export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = false) {
   ctx.save();
@@ -26,14 +65,24 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   const B = CHAMP.body, BD = CHAMP.bodyDark, BL = CHAMP.belly;
 
   // ---- trailing humps (the classic three-bump silhouette) ----
-  // Drawn back-to-front behind the neck; they bob slightly out of phase.
+  // Same body green all the way back, bobbing gently out of phase, with a
+  // soft dark shading arc on top so they read as one continuous body.
+  const humps = [];
   for (let i = 2; i >= 0; i--) {
-    const hx = -s * (1.35 + i * 1.05);
-    const hy = s * (0.55 + Math.sin(time * 0.006 + i * 1.9) * 0.07);
-    const hr = s * (0.78 - i * 0.16);
-    ctx.fillStyle = i === 0 ? B : BD;
+    const hx = -s * (1.35 + i * 1.02);
+    const hy = s * (0.55 + Math.sin(time * 0.006 + i * 1.9) * 0.06);
+    const hr = s * (0.8 - i * 0.15);
+    humps[i] = [hx, hy, hr];
+    ctx.fillStyle = B;
     ctx.beginPath();
     ctx.arc(hx, hy, hr, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    // darker green along the top of the back
+    ctx.fillStyle = BD;
+    ctx.beginPath();
+    ctx.arc(hx, hy, hr, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.arc(hx, hy + hr * 0.28, hr * 0.82, Math.PI * 1.85, Math.PI * 1.15, true);
     ctx.closePath();
     ctx.fill();
     // waterline shading under each hump
@@ -42,8 +91,9 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
     ctx.ellipse(hx, hy, hr, hr * 0.16, 0, 0, 7);
     ctx.fill();
   }
+
   // tail fin flicking up behind the last hump
-  const tx = -s * 4.15, ty = s * 0.45;
+  const tx = -s * 4.1, ty = s * 0.45;
   ctx.fillStyle = BD;
   ctx.save();
   ctx.translate(tx, ty);
@@ -57,23 +107,39 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   ctx.fill();
   ctx.restore();
 
-  // ---- neck: thick swoosh from the front hump up to the head ----
-  ctx.strokeStyle = B;
-  ctx.lineWidth = s * 1.15;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(-s * 1.3, s * 0.5);
-  ctx.quadraticCurveTo(-s * 0.75, s * 0.25, -s * 0.3, -s * 0.1);
-  ctx.quadraticCurveTo(-s * 0.05, -s * 0.32, s * 0.12, -s * 0.38);
-  ctx.stroke();
+  // ---- neck: smooth tapered sweep from the front hump up to the head ----
+  taperedCurve(
+    ctx,
+    [-s * 1.5, s * 0.55], [-s * 0.7, s * 0.35],
+    [-s * 0.28, -s * 0.05], [-s * 0.02, -s * 0.3],
+    [s * 0.28, -s * 0.5],
+    s * 1.5, s * 0.85, B
+  );
 
-  // belly stripe up the neck
-  ctx.strokeStyle = BL;
-  ctx.lineWidth = s * 0.52;
-  ctx.beginPath();
-  ctx.moveTo(-s * 1.05, s * 0.72);
-  ctx.quadraticCurveTo(-s * 0.5, s * 0.42, -s * 0.08, 0);
-  ctx.stroke();
+  // cream belly plates up the front of the neck
+  const bellyPts = taperedCurve(
+    ctx,
+    [-s * 1.0, s * 0.72], [-s * 0.42, s * 0.42],
+    [-s * 0.12, s * 0.02], [s * 0.02, -s * 0.18],
+    [s * 0.22, -s * 0.32],
+    s * 0.72, s * 0.42, BL
+  );
+  // plate seams: short lines across the belly ribbon
+  ctx.strokeStyle = CHAMP.bellyLine;
+  ctx.lineWidth = s * 0.045;
+  ctx.lineCap = 'round';
+  for (let i = 2; i < bellyPts.length - 3; i += 3) {
+    const [px, py] = bellyPts[i];
+    const [qx, qy] = bellyPts[i + 1];
+    let dx = qx - px, dy = qy - py;
+    const L = Math.hypot(dx, dy) || 1;
+    const t = i / (bellyPts.length - 1);
+    const w = (s * 0.72 + (s * 0.42 - s * 0.72) * t) * 0.36;
+    ctx.beginPath();
+    ctx.moveTo(px - dy / L * w, py + dx / L * w);
+    ctx.lineTo(px + dy / L * w, py - dx / L * w);
+    ctx.stroke();
+  }
 
   // ---- flipper (flaps!) ----
   // flapT 0 → wing snapped up; eases back down to a glide.
@@ -84,7 +150,7 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   ctx.rotate(flapAng);
   ctx.fillStyle = BD;
   ctx.beginPath();
-  ctx.ellipse(s * 0.52, 0, s * 0.62, s * 0.26, 0.15, 0, 7);
+  ctx.ellipse(s * 0.55, 0, s * 0.66, s * 0.28, 0.15, 0, 7);
   ctx.fill();
   ctx.restore();
 
@@ -94,13 +160,19 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   ctx.translate(hx, hy);
   ctx.rotate(wob * 0.03);
 
-  // snout + skull as one rounded blob, nose pointing +x
+  // skull: rounded, with a gentle snout — one blob plus a soft muzzle
   ctx.fillStyle = B;
   ctx.beginPath();
-  ctx.ellipse(0, 0, s * 0.78, s * 0.62, 0, 0, 7);
+  ctx.ellipse(0, 0, s * 0.74, s * 0.6, -0.08, 0, 7);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(s * 0.55, s * 0.12, s * 0.42, s * 0.32, 0.1, 0, 7);
+  ctx.ellipse(s * 0.52, s * 0.1, s * 0.4, s * 0.3, 0.12, 0, 7);
+  ctx.fill();
+
+  // darker green crown patch, like the mascot's shaded back
+  ctx.fillStyle = BD;
+  ctx.beginPath();
+  ctx.ellipse(-s * 0.12, -s * 0.34, s * 0.52, s * 0.24, -0.18, Math.PI, 0);
   ctx.fill();
 
   // pale muzzle
@@ -110,9 +182,9 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   ctx.fill();
 
   // nostril
-  ctx.fillStyle = BD;
+  ctx.fillStyle = CHAMP.scute;
   ctx.beginPath();
-  ctx.arc(s * 0.78, s * 0.02, s * 0.045, 0, 7);
+  ctx.arc(s * 0.76, s * 0.02, s * 0.045, 0, 7);
   ctx.fill();
 
   // mouth
@@ -127,7 +199,7 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
   }
   ctx.stroke();
 
-  // eye
+  // eye — big and friendly, like the mascot
   if (dead) {
     ctx.strokeStyle = '#1d3a28';
     ctx.lineWidth = s * 0.07;
@@ -138,46 +210,48 @@ export function drawChamp(ctx, x, y, s, tilt = 0, time = 0, flapT = 1, dead = fa
     ctx.stroke();
   } else {
     ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.ellipse(s * 0.2, -s * 0.15, s * 0.21, s * 0.24, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s * 0.22, -s * 0.14, s * 0.22, s * 0.25, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#1d2733';
-    ctx.beginPath(); ctx.arc(s * 0.27, -s * 0.14, s * 0.115, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.29, -s * 0.13, s * 0.12, 0, 7); ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(s * 0.31, -s * 0.19, s * 0.04, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.33, -s * 0.18, s * 0.045, 0, 7); ctx.fill();
+    // soft eyelid line
+    ctx.strokeStyle = BD;
+    ctx.lineWidth = s * 0.045;
+    ctx.beginPath(); ctx.arc(s * 0.22, -s * 0.14, s * 0.24, -2.5, -0.9); ctx.stroke();
   }
 
   // rosy cheek
-  ctx.fillStyle = 'rgba(242,162,74,0.5)';
-  ctx.beginPath(); ctx.arc(s * 0.05, s * 0.18, s * 0.11, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(242,162,74,0.45)';
+  ctx.beginPath(); ctx.arc(s * 0.08, s * 0.2, s * 0.11, 0, 7); ctx.fill();
 
-  // scutes: spiky little fins from forehead down the back of the neck
+  // soft rounded crest bumps from the crown down the back of the neck
   ctx.fillStyle = CHAMP.scute;
-  const spikes = [
-    [-s * 0.25, -s * 0.52, s * 0.3, -0.5],
-    [-s * 0.55, -s * 0.28, s * 0.26, -0.9],
-    [-s * 0.78, s * 0.08, s * 0.22, -1.25],
+  const bumps = [
+    [-s * 0.3, -s * 0.5, s * 0.17, -0.35],
+    [-s * 0.58, -s * 0.26, s * 0.15, -0.75],
+    [-s * 0.8, s * 0.08, s * 0.13, -1.1],
   ];
-  for (const [sx, sy, sr, sa] of spikes) {
+  for (const [bx, by, br, ba] of bumps) {
     ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(sa);
+    ctx.translate(bx, by);
+    ctx.rotate(ba);
     ctx.beginPath();
-    ctx.moveTo(-sr * 0.55, 0);
-    ctx.quadraticCurveTo(-sr * 0.1, -sr * 1.25, sr * 0.5, -sr * 0.15);
+    ctx.ellipse(0, -br * 0.4, br, br * 0.75, 0, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
   }
   ctx.restore(); // head
 
-  // scutes continuing along the humps
+  // rounded crest bumps continuing along the humps
   ctx.fillStyle = CHAMP.scute;
   for (let i = 0; i < 3; i++) {
-    const sx2 = -s * (1.35 + i * 1.05);
-    const sy2 = s * (0.55 + Math.sin(time * 0.006 + i * 1.9) * 0.07) - s * (0.76 - i * 0.16);
-    const sr2 = s * (0.2 - i * 0.04);
+    const [hx2, hy2, hr2] = humps[i];
+    const sy2 = hy2 - hr2 * 0.97;
+    const sr2 = s * (0.18 - i * 0.035);
     ctx.beginPath();
-    ctx.moveTo(sx2 - sr2, sy2 + sr2 * 0.4);
-    ctx.quadraticCurveTo(sx2, sy2 - sr2 * 1.3, sx2 + sr2, sy2 + sr2 * 0.4);
+    ctx.ellipse(hx2, sy2, sr2, sr2 * 0.8, 0, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
   }
@@ -204,26 +278,27 @@ function drawChampHeadOnly(ctx, hx, hy, s, time) {
   ctx.save();
   ctx.translate(hx, hy);
   ctx.fillStyle = CHAMP.body;
-  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.78, s * 0.62, 0, 0, 7); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(s * 0.55, s * 0.12, s * 0.42, s * 0.32, 0.1, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.74, s * 0.6, -0.08, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(s * 0.52, s * 0.1, s * 0.4, s * 0.3, 0.12, 0, 7); ctx.fill();
+  ctx.fillStyle = CHAMP.bodyDark;
+  ctx.beginPath(); ctx.ellipse(-s * 0.12, -s * 0.34, s * 0.52, s * 0.24, -0.18, Math.PI, 0); ctx.fill();
   ctx.fillStyle = CHAMP.belly;
   ctx.beginPath(); ctx.ellipse(s * 0.5, s * 0.22, s * 0.36, s * 0.24, 0.1, 0, 7); ctx.fill();
-  ctx.fillStyle = CHAMP.bodyDark;
-  ctx.beginPath(); ctx.arc(s * 0.78, s * 0.02, s * 0.045, 0, 7); ctx.fill();
+  ctx.fillStyle = CHAMP.scute;
+  ctx.beginPath(); ctx.arc(s * 0.76, s * 0.02, s * 0.045, 0, 7); ctx.fill();
   ctx.strokeStyle = '#1d5c33'; ctx.lineWidth = s * 0.055; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.arc(s * 0.42, s * 0.18, s * 0.3, 0.35, 1.25); ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.ellipse(s * 0.2, -s * 0.15, s * 0.21, s * 0.24, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(s * 0.22, -s * 0.14, s * 0.22, s * 0.25, 0, 0, 7); ctx.fill();
   ctx.fillStyle = '#1d2733';
-  ctx.beginPath(); ctx.arc(s * 0.27, -s * 0.14, s * 0.115, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(s * 0.29, -s * 0.13, s * 0.12, 0, 7); ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(s * 0.31, -s * 0.19, s * 0.04, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(s * 0.33, -s * 0.18, s * 0.045, 0, 7); ctx.fill();
   ctx.fillStyle = CHAMP.scute;
-  for (const [sx, sy, sr, sa] of [[-s * 0.25, -s * 0.52, s * 0.3, -0.5], [-s * 0.55, -s * 0.28, s * 0.26, -0.9]]) {
-    ctx.save(); ctx.translate(sx, sy); ctx.rotate(sa);
+  for (const [bx, by, br, ba] of [[-s * 0.3, -s * 0.5, s * 0.17, -0.35], [-s * 0.58, -s * 0.26, s * 0.15, -0.75]]) {
+    ctx.save(); ctx.translate(bx, by); ctx.rotate(ba);
     ctx.beginPath();
-    ctx.moveTo(-sr * 0.55, 0);
-    ctx.quadraticCurveTo(-sr * 0.1, -sr * 1.25, sr * 0.5, -sr * 0.15);
+    ctx.ellipse(0, -br * 0.4, br, br * 0.75, 0, Math.PI, 0);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   }

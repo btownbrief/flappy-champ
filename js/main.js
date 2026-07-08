@@ -3,7 +3,7 @@
 
 import { sound } from './audio.js';
 import { drawChamp } from './champ.js';
-import { palette, drawBackdrop, drawWater } from './scenery.js';
+import { palette, drawBackdrop, drawWater, drawBreakwater } from './scenery.js';
 import { VARIANTS, drawBottomBoat, drawTopSail } from './boats.js';
 import {
   lbEnabled, getName, submitScore, renamePlayer, fetchTop, monthLabel, playerId,
@@ -72,7 +72,7 @@ let score = 0;
 let best = Number(localStorage.getItem(LS_BEST) || 0);
 let obstacles = [];        // { x, gapY, gapH, w, passed, v }
 let scroll = 0;            // world distance travelled, drives parallax
-let dayT = 0.06;           // position in the looping day (starts mid-morning)
+let dayT = 0.30;           // position in the looping day (opens at sunset)
 let shake = 0;
 let splashes = [];
 let deadInWater = false;
@@ -298,6 +298,7 @@ function render(time) {
 
   drawBackdrop(ctx, W, H, horizon, scroll, pal, time);
   drawWater(ctx, W, H, horizon, scroll, pal, time);
+  drawBreakwater(ctx, W, H, horizon, scroll, pal, time);
 
   for (const ob of obstacles) {
     drawTopSail(ctx, ob.x, ob.w, ob.gapY - ob.gapH / 2, ob.v, time);

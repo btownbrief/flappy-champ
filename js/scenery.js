@@ -1,8 +1,10 @@
-// FLAPPY CHAMP — layered parallax of the Burlington waterfront, looking west
-// across Lake Champlain: sky → Adirondack ridges → the breakwater lighthouses
-// → shoreline silhouettes (ECHO center, Community Boathouse, Waterfront Park)
-// → open water. The palette drifts through a full Burlington day as you play,
-// including the sunset the waterfront is famous for.
+// FLAPPY CHAMP — layered parallax of the view WEST from the Burlington
+// waterfront, out over open Lake Champlain: sky → Adirondack ridges → low
+// tree-covered points hugging the horizon → open water, with the famous
+// white breakwater lighthouse standing out in the lake. No buildings across
+// the water — from Burlington you see mountains, trees, and the light.
+// The palette drifts through a full Burlington day as you play, and the game
+// opens at the sunset the waterfront is famous for.
 
 // ---------------------------------------------------------------- palette
 
@@ -12,6 +14,9 @@ function hex(c) {
 function mix(a, b, t) {
   const A = hex(a), B = hex(b);
   return `rgb(${Math.round(A[0] + (B[0] - A[0]) * t)},${Math.round(A[1] + (B[1] - A[1]) * t)},${Math.round(A[2] + (B[2] - A[2]) * t)})`;
+}
+function lerpRGB(a, b, t) {
+  return `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
 }
 
 // One full day, looping: noon → golden hour → sunset → dusk → night → dawn.
@@ -59,6 +64,8 @@ export function palette(t) {
     p[key] = typeof a[key] === 'number' ? a[key] + (b[key] - a[key]) * k : mix(a[key], b[key], k);
   }
   p.night = Math.max(a.stars, b.stars) > 0 ? p.stars : 0;
+  // how "golden" the light is right now (peaks when the sun sits on the water)
+  p.glow = Math.max(0, 1 - Math.abs(p.sunH - 0.08) * 3) * (1 - p.night);
   return p;
 }
 
@@ -87,123 +94,39 @@ function drawRidge(ctx, W, horizon, scroll, amp, seed, color) {
   ctx.fill();
 }
 
-function rand(seed) { // tiny deterministic prng for stars
+function rand(seed) { // tiny deterministic prng
   const x = Math.sin(seed * 127.1) * 43758.5453;
   return x - Math.floor(x);
 }
 
-// ---------------------------------------------------- shoreline landmarks
-// All drawn as flat silhouettes sitting on the horizon line, unit = u.
+// -------------------------------------------------- horizon landmasses
+// Low, tree-covered points and islands hugging the far waterline — the way
+// Juniper Island and the Adirondack shore actually read from the waterfront.
+// `seed` is a stable per-instance value so nothing jitters frame to frame.
 
-function drawBoathouse(ctx, x, y, u, color) {
-  // Burlington Community Boathouse: long two-story float, hipped roof,
-  // square cupola with its own little roof and a flag.
+function drawPoint(ctx, x, y, u, color, seed, wMul = 1) {
   ctx.fillStyle = color;
-  // pilings / float
-  ctx.fillRect(x - u * 2.1, y - u * 0.16, u * 4.2, u * 0.16);
-  // main hall
-  ctx.fillRect(x - u * 1.8, y - u * 1.05, u * 3.6, u * 0.92);
-  // wrap-around porch posts
-  for (let i = -3; i <= 3; i++) ctx.fillRect(x + i * u * 0.55 - u * 0.03, y - u * 0.42, u * 0.06, u * 0.3);
-  // hipped roof
+  // low mound of land
   ctx.beginPath();
-  ctx.moveTo(x - u * 2.0, y - u * 1.05);
-  ctx.lineTo(x - u * 1.2, y - u * 1.5);
-  ctx.lineTo(x + u * 1.2, y - u * 1.5);
-  ctx.lineTo(x + u * 2.0, y - u * 1.05);
-  ctx.closePath(); ctx.fill();
-  // cupola
-  ctx.fillRect(x - u * 0.32, y - u * 1.95, u * 0.64, u * 0.5);
-  ctx.beginPath();
-  ctx.moveTo(x - u * 0.44, y - u * 1.95);
-  ctx.lineTo(x, y - u * 2.28);
-  ctx.lineTo(x + u * 0.44, y - u * 1.95);
-  ctx.closePath(); ctx.fill();
-  // flagpole + pennant
-  ctx.fillRect(x - u * 0.02, y - u * 2.75, u * 0.04, u * 0.5);
-  ctx.beginPath();
-  ctx.moveTo(x + u * 0.02, y - u * 2.75);
-  ctx.lineTo(x + u * 0.4, y - u * 2.66);
-  ctx.lineTo(x + u * 0.02, y - u * 2.56);
-  ctx.closePath(); ctx.fill();
-}
-
-function drawEcho(ctx, x, y, u, color) {
-  // ECHO Leahy Center: low stone base, big glass prow, dramatic single-pitch
-  // roof sweeping up toward the lake.
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x - u * 1.9, y);
-  ctx.lineTo(x - u * 1.9, y - u * 0.85);
-  ctx.lineTo(x - u * 0.4, y - u * 1.0);
-  ctx.lineTo(x + u * 1.6, y - u * 1.75);  // the swooping roofline
-  ctx.lineTo(x + u * 1.95, y - u * 0.6);
-  ctx.lineTo(x + u * 1.95, y);
-  ctx.closePath(); ctx.fill();
-  // roof mast / vent
-  ctx.fillRect(x + u * 0.9, y - u * 1.85, u * 0.05, u * 0.45);
-}
-
-function drawLighthouse(ctx, x, y, u, color) {
-  // Breakwater light: squat white tower on a crib — silhouetted here.
-  ctx.fillStyle = color;
-  ctx.fillRect(x - u * 0.55, y - u * 0.14, u * 1.1, u * 0.14); // crib
-  ctx.beginPath();
-  ctx.moveTo(x - u * 0.3, y - u * 0.14);
-  ctx.lineTo(x - u * 0.2, y - u * 1.0);
-  ctx.lineTo(x + u * 0.2, y - u * 1.0);
-  ctx.lineTo(x + u * 0.3, y - u * 0.14);
-  ctx.closePath(); ctx.fill();
-  ctx.fillRect(x - u * 0.26, y - u * 1.12, u * 0.52, u * 0.12); // gallery
-  ctx.fillRect(x - u * 0.14, y - u * 1.34, u * 0.28, u * 0.22); // lantern
-  ctx.beginPath();
-  ctx.moveTo(x - u * 0.18, y - u * 1.34);
-  ctx.lineTo(x, y - u * 1.52);
-  ctx.lineTo(x + u * 0.18, y - u * 1.34);
-  ctx.closePath(); ctx.fill();
-}
-
-function drawMarinaMasts(ctx, x, y, u, color) {
-  // sailing-center docks: cluster of bare masts
-  ctx.fillStyle = color;
-  ctx.fillRect(x - u * 1.4, y - u * 0.12, u * 2.8, u * 0.12);
-  const hs = [1.3, 1.7, 1.1, 1.55, 1.25];
-  hs.forEach((h, i) => {
-    const mx = x - u * 1.1 + i * u * 0.55;
-    ctx.fillRect(mx, y - u * h, u * 0.045, u * h);
+  ctx.moveTo(x - u * 4.2 * wMul, y + 1.5);
+  ctx.quadraticCurveTo(x - u * 2.2 * wMul, y - u * 0.5, x, y - u * 0.55);
+  ctx.quadraticCurveTo(x + u * 2.3 * wMul, y - u * 0.48, x + u * 4.2 * wMul, y + 1.5);
+  ctx.closePath();
+  ctx.fill();
+  // ragged tree line along the top — sizes seeded per-tree, never per-frame
+  for (let i = 0; i < 7; i++) {
+    const tx = x + (i - 3) * u * 0.95 * wMul;
+    const r = u * (0.26 + rand(seed * 7.31 + i * 1.7) * 0.24);
     ctx.beginPath();
-    ctx.moveTo(mx + u * 0.045, y - u * h);
-    ctx.lineTo(mx + u * 0.22, y - u * h + u * 0.08);
-    ctx.lineTo(mx + u * 0.045, y - u * h + u * 0.16);
-    ctx.closePath(); ctx.fill();
-  });
-}
-
-function drawTrees(ctx, x, y, u, color, n = 3) {
-  ctx.fillStyle = color;
-  for (let i = 0; i < n; i++) {
-    const tx = x + (i - (n - 1) / 2) * u * 0.8;
-    const r = u * (0.42 + rand(x + i) * 0.2);
-    ctx.beginPath(); ctx.arc(tx, y - r * 1.1, r, 0, 7); ctx.fill();
-    ctx.fillRect(tx - u * 0.04, y - r * 0.6, u * 0.08, r * 0.6);
+    ctx.arc(tx, y - u * 0.42, r, Math.PI, 0);
+    ctx.fill();
   }
-}
-
-function drawLampposts(ctx, x, y, u, color, n = 4) {
-  // Waterfront Park boardwalk lamps
-  ctx.fillStyle = color;
-  for (let i = 0; i < n; i++) {
-    const lx = x + i * u * 0.9;
-    ctx.fillRect(lx, y - u * 0.72, u * 0.045, u * 0.72);
-    ctx.beginPath(); ctx.arc(lx + u * 0.022, y - u * 0.78, u * 0.09, 0, 7); ctx.fill();
-  }
-  ctx.fillRect(x - u * 0.2, y - u * 0.18, (n - 1) * u * 0.9 + u * 0.4, u * 0.07); // railing
 }
 
 // ---------------------------------------------------------------- scenery
 
 // Everything above the water: sky, sun/moon, stars, clouds, Adirondacks,
-// breakwater + shoreline strip. horizon = y of the far waterline.
+// and the low treed points across the lake. horizon = y of the far waterline.
 export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
   // sky
   const sky = ctx.createLinearGradient(0, 0, 0, horizon);
@@ -241,7 +164,7 @@ export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
     ctx.beginPath(); ctx.arc(sunX, sunY, Math.min(W, 800) * 0.045, 0, 7); ctx.fill();
   }
 
-  // clouds: soft three-lobe puffs drifting slowly
+  // clouds: soft three-lobe puffs drifting slowly, streaked like a lake sunset
   ctx.fillStyle = pal.cloud;
   ctx.globalAlpha = 0.75;
   for (let i = 0; i < 4; i++) {
@@ -255,31 +178,34 @@ export function drawBackdrop(ctx, W, H, horizon, scroll, pal, time) {
     ctx.arc(cx - cs * 0.7, cy + cs * 0.14, cs * 0.46, 0, 7);
     ctx.fill();
   }
+  // long flat sunset bands low in the sky
+  if (pal.glow > 0.05) {
+    ctx.globalAlpha = 0.35 * pal.glow;
+    for (let i = 0; i < 3; i++) {
+      const by = horizon * (0.58 + i * 0.11);
+      const bx = ((rand(i * 21.3) * (W + 400) + time * 0.004) % (W + 400)) - 200;
+      const bw = W * (0.3 + rand(i * 3.3) * 0.25);
+      ctx.beginPath();
+      ctx.ellipse(bx, by, bw / 2, 4 + i * 2, 0, 0, 7);
+      ctx.fill();
+    }
+  }
   ctx.globalAlpha = 1;
 
   // the Adirondacks across the lake, two ridges
   drawRidge(ctx, W, horizon, scroll * 0.05, H * 0.17, 3.7, pal.far);
   drawRidge(ctx, W, horizon, scroll * 0.11, H * 0.115, 9.2, pal.near);
 
-  // shoreline strip: repeating run of Burlington waterfront landmarks
+  // low tree-covered points across the water (no buildings out here —
+  // Burlington looks west over open lake)
   const u = Math.max(H * 0.028, 16);
-  const period = u * 34;
-  const sOff = scroll * 0.22;
-  ctx.save();
+  const period = u * 56;
+  const sOff = scroll * 0.16;
   for (let k = Math.floor(sOff / period) - 1; k * period - sOff < W + period; k++) {
     const bx = k * period - sOff;
-    drawTrees(ctx, bx + u * 2, horizon, u, pal.silh, 3);
-    drawEcho(ctx, bx + u * 6.4, horizon, u, pal.silh);
-    drawLampposts(ctx, bx + u * 9.6, horizon, u, pal.silh, 4);
-    drawBoathouse(ctx, bx + u * 15.5, horizon, u, pal.silh);
-    drawMarinaMasts(ctx, bx + u * 20.5, horizon, u, pal.silh);
-    drawTrees(ctx, bx + u * 24, horizon, u, pal.silh, 4);
-    drawLighthouse(ctx, bx + u * 29, horizon + u * 0.3, u, pal.silh); // out on the breakwater
-    // breakwater line
-    ctx.fillStyle = pal.silh;
-    ctx.fillRect(bx + u * 26.6, horizon + u * 0.2, u * 4.8, u * 0.12);
+    drawPoint(ctx, bx + u * 9, horizon, u, pal.silh, k * 3 + 11, 1.25);
+    drawPoint(ctx, bx + u * 34, horizon, u * 0.75, pal.silh, k * 5 + 3, 0.9);
   }
-  ctx.restore();
 }
 
 // The lake itself, from the horizon to the bottom of the screen.
@@ -290,23 +216,33 @@ export function drawWater(ctx, W, H, horizon, scroll, pal, time) {
   ctx.fillStyle = g;
   ctx.fillRect(0, horizon, W, H - horizon);
 
-  // glitter path under a low sun
+  // glitter path under a low sun: soft horizontal shimmer streaks fanning
+  // out toward the viewer, like the real thing off the Burlington waterfront
   if (pal.sunH < 0.5 && pal.sunH > -0.2) {
     const sunX = W * 0.68;
-    ctx.globalAlpha = 0.28 * (1 - Math.abs(pal.sunH - 0.05) * 2.2);
-    if (ctx.globalAlpha > 0.01) {
-      const gl = ctx.createLinearGradient(0, horizon, 0, H);
-      gl.addColorStop(0, pal.sun);
-      gl.addColorStop(1, 'rgba(255,180,90,0)');
-      ctx.fillStyle = gl;
-      ctx.beginPath();
-      ctx.moveTo(sunX - W * 0.03, horizon);
-      ctx.lineTo(sunX + W * 0.03, horizon);
-      ctx.lineTo(sunX + W * 0.16, H);
-      ctx.lineTo(sunX - W * 0.16, H);
-      ctx.closePath(); ctx.fill();
+    const strength = Math.max(0, 1 - Math.abs(pal.sunH - 0.05) * 2.2);
+    if (strength > 0.03) {
+      ctx.fillStyle = pal.sun;
+      const rows = 14;
+      for (let i = 0; i < rows; i++) {
+        const t = i / (rows - 1);
+        const gy = horizon + (H - horizon) * t * 0.92 + 4;
+        const halfW = W * (0.035 + t * 0.13);
+        const fade = (1 - t * 0.75) * strength;
+        // 2-3 dashes per row, swaying independently
+        for (let d = 0; d < 3; d++) {
+          const ph = time * (0.0012 + d * 0.0005) + i * 1.7 + d * 2.6;
+          const dx = Math.sin(ph) * halfW * 0.7;
+          const dw = halfW * (0.35 + 0.3 * Math.sin(ph * 1.7 + d));
+          if (dw <= 0) continue;
+          ctx.globalAlpha = 0.16 * fade * (0.6 + 0.4 * Math.sin(ph * 2.3));
+          ctx.beginPath();
+          ctx.ellipse(sunX + dx, gy, dw, 1.6 + t * 3.2, 0, 0, 7);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
   }
 
   // scrolling wave strokes, three bands with increasing parallax
@@ -329,4 +265,137 @@ export function drawWater(ctx, W, H, horizon, scroll, pal, time) {
     }
   }
   ctx.globalAlpha = 1;
+}
+
+// ------------------------------------------------ the breakwater lighthouse
+// Burlington's white breakwater light, standing on its stone crib out in the
+// lake. Drawn AFTER the water so it sits on the surface, with a shimmering
+// reflection. Lit windows and a pulsing beacon after dark.
+export function drawBreakwater(ctx, W, H, horizon, scroll, pal, time) {
+  const u = Math.max(H * 0.052, 26);          // scale unit ≈ tower half-width
+  const period = Math.max(W * 1.7, u * 42);   // one light per ~1.7 screens
+  const sOff = scroll * 0.3;                  // closer than the far shore
+  const n = pal.night || 0;
+  const glow = pal.glow || 0;
+
+  // daylight cream → warm sunset cream → cold night blue
+  const cream = [
+    244 + (255 - 244) * glow * 0.4,
+    238 + (214 - 238) * glow * 0.5,
+    226 + (172 - 226) * glow * 0.7,
+  ];
+  const white = lerpRGB(cream, [86, 98, 132], n * 0.85);
+  const dark = lerpRGB([94, 74, 66], [30, 34, 54], n * 0.8);   // trim / base
+  const rock = lerpRGB([88, 90, 100], [26, 32, 50], n * 0.8);
+  const rockLit = lerpRGB([128, 118, 118], [40, 48, 68], n * 0.8);
+
+  for (let k = Math.floor(sOff / period) - 1; k * period - sOff < W + period; k++) {
+    const x = k * period - sOff + period * 0.55;
+    if (x < -u * 6 || x > W + u * 6) continue;
+    const y = horizon + (H - horizon) * 0.12;  // waterline at the crib
+
+    // --- stone crib / jetty: two rows of blocks, catching the light ---
+    ctx.fillStyle = rock;
+    ctx.beginPath();
+    ctx.ellipse(x, y + u * 0.05, u * 1.7, u * 0.34, 0, 0, 7);
+    ctx.fill();
+    for (let i = 0; i < 5; i++) {
+      const rx = x + (i - 2) * u * 0.62;
+      const rr = u * (0.28 + rand(k * 9.1 + i) * 0.14);
+      ctx.fillStyle = i % 2 ? rock : rockLit;
+      ctx.beginPath();
+      ctx.ellipse(rx, y - u * 0.14, rr, rr * 0.62, 0, 0, 7);
+      ctx.fill();
+    }
+
+    // --- open braced base (the brown timber cross-frame) ---
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = u * 0.09;
+    ctx.beginPath();
+    ctx.moveTo(x - u * 0.62, y - u * 0.2); ctx.lineTo(x - u * 0.42, y - u * 0.86);
+    ctx.moveTo(x + u * 0.62, y - u * 0.2); ctx.lineTo(x + u * 0.42, y - u * 0.86);
+    ctx.moveTo(x - u * 0.58, y - u * 0.3); ctx.lineTo(x + u * 0.44, y - u * 0.8);
+    ctx.moveTo(x + u * 0.58, y - u * 0.3); ctx.lineTo(x - u * 0.44, y - u * 0.8);
+    ctx.stroke();
+
+    // --- white tapered tower ---
+    const baseY = y - u * 0.82, topY = y - u * 2.35;
+    ctx.fillStyle = white;
+    ctx.beginPath();
+    ctx.moveTo(x - u * 0.52, baseY);
+    ctx.lineTo(x - u * 0.3, topY);
+    ctx.lineTo(x + u * 0.3, topY);
+    ctx.lineTo(x + u * 0.52, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // shaded edge for a little roundness
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.beginPath();
+    ctx.moveTo(x + u * 0.24, topY);
+    ctx.lineTo(x + u * 0.3, topY);
+    ctx.lineTo(x + u * 0.52, baseY);
+    ctx.lineTo(x + u * 0.36, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // little window
+    ctx.fillStyle = n > 0.25 ? '#ffd98a' : dark;
+    ctx.fillRect(x - u * 0.06, y - u * 1.6, u * 0.12, u * 0.18);
+
+    // --- gallery deck + railing ---
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - u * 0.42, topY - u * 0.08, u * 0.84, u * 0.1);
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = u * 0.035;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x + i * u * 0.17, topY - u * 0.08);
+      ctx.lineTo(x + i * u * 0.17, topY - u * 0.3);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(x - u * 0.38, topY - u * 0.3);
+    ctx.lineTo(x + u * 0.38, topY - u * 0.3);
+    ctx.stroke();
+
+    // --- lantern room + roof + finial ---
+    const lanY = topY - u * 0.3;
+    ctx.fillStyle = white;
+    ctx.fillRect(x - u * 0.24, lanY - u * 0.42, u * 0.48, u * 0.44);
+    ctx.fillStyle = n > 0.12 || glow > 0.4 ? '#ffe9a8' : lerpRGB([60, 70, 90], [16, 22, 40], n);
+    ctx.fillRect(x - u * 0.16, lanY - u * 0.38, u * 0.32, u * 0.34);
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(x - u * 0.3, lanY - u * 0.42);
+    ctx.lineTo(x, lanY - u * 0.72);
+    ctx.lineTo(x + u * 0.3, lanY - u * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(x - u * 0.025, lanY - u * 0.84, u * 0.05, u * 0.14);
+
+    // --- beacon glow after dark ---
+    if (n > 0.12) {
+      const pulse = 0.55 + 0.45 * Math.sin(time * 0.004 + k * 2.1);
+      const gl = ctx.createRadialGradient(x, lanY - u * 0.2, 2, x, lanY - u * 0.2, u * 1.6);
+      gl.addColorStop(0, `rgba(255,236,170,${0.75 * n * pulse})`);
+      gl.addColorStop(1, 'rgba(255,236,170,0)');
+      ctx.fillStyle = gl;
+      ctx.fillRect(x - u * 1.6, lanY - u * 1.8, u * 3.2, u * 3.2);
+    }
+
+    // --- reflection shimmering below the crib ---
+    ctx.save();
+    ctx.globalAlpha = 0.22 + glow * 0.14;
+    ctx.fillStyle = white;
+    const refTop = y + u * 0.3;
+    for (let i = 0; i < 7; i++) {
+      const ry = refTop + i * u * 0.3;
+      const wob = Math.sin(time * 0.0022 + i * 1.4 + k) * u * 0.12;
+      const rw = u * (0.5 - i * 0.055);
+      if (rw <= 0) break;
+      ctx.beginPath();
+      ctx.ellipse(x + wob, ry, rw, u * 0.07, 0, 0, 7);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 }
