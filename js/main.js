@@ -1,4 +1,4 @@
-// FLAPPY CHAMP — a Btown Games production for the Btown Brief.
+// FLAPPY CHAMP — a Btown Games production for the BTown Brief.
 // Tap to flap Champ, the Lake Champlain monster, through the sailboats.
 
 import { sound } from './audio.js';

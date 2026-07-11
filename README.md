@@ -3,7 +3,7 @@
 Fly **Champ**, Burlington's beloved Lake Champlain monster, through the
 sailboats of the lake. A Flappy Bird–style arcade game for
 [Btown Games](https://btownbrief.github.io/), the browser arcade of the
-[Btown Brief](https://www.btownbrief.com).
+[BTown Brief](https://www.btownbrief.com).
 
 **Play it live:** https://btownbrief.github.io/flappy-champ/
 
