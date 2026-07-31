@@ -89,6 +89,13 @@ class SoundEngine {
     this._tone(3136, 0.12, { type: 'sine', gain: 0.04, delay: 0.05, attack: 0.001 });
   }
 
+  // Tight pass: a tiny glassy glint layered after the routine score bell.
+  nearMiss() {
+    if (!this.ready()) return;
+    this._tone(2093, 0.11, { type: 'sine', gain: 0.055, attack: 0.001 });
+    this._tone(2637, 0.16, { type: 'sine', gain: 0.045, delay: 0.035, attack: 0.001 });
+  }
+
   // Bonked a mast: hollow wooden thunk.
   thunk() {
     if (!this.ready()) return;
