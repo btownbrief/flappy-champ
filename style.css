@@ -39,6 +39,17 @@ html, body {
 }
 
 .hidden { display: none !important; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ---------------------------------------------------------------- HUD */
 
@@ -82,6 +93,60 @@ html, body {
 @keyframes bob {
   0%, 100% { transform: translateY(0); opacity: 0.95; }
   50% { transform: translateY(7px); opacity: 0.65; }
+}
+
+#effect-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.score-floater {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: var(--cream);
+  font-size: clamp(18px, 3vh, 24px);
+  font-weight: 900;
+  text-shadow: 0 2px 0 var(--navy), 0 3px 8px rgba(14, 34, 56, 0.7);
+  animation: float-score 0.65s ease-out forwards;
+}
+.score-floater.tight {
+  color: #ffe19a;
+  font-size: clamp(12px, 2vh, 16px);
+  letter-spacing: 0.08em;
+}
+@keyframes float-score {
+  from { opacity: 1; transform: translate(-50%, -35%) scale(0.85); }
+  to { opacity: 0; transform: translate(-50%, -130%) scale(1.08); }
+}
+
+#milestone-banner {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  width: min(88vw, 370px);
+  padding: 12px 18px;
+  border: 2px solid rgba(255, 217, 112, 0.8);
+  border-radius: 16px;
+  background: rgba(14, 34, 56, 0.9);
+  color: var(--cream);
+  text-align: center;
+  font-size: clamp(20px, 3.5vh, 29px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.8);
+}
+#milestone-banner.show {
+  animation: milestone 1.25s ease-out forwards;
+}
+@keyframes milestone {
+  0% { opacity: 0; transform: translate(-50%, -45%) scale(0.8); }
+  14%, 75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -58%) scale(1.03); }
 }
 
 #mute {
@@ -262,7 +327,36 @@ html, body {
   align-items: center;
   gap: 18px;
 }
-#medal { width: 84px; height: 84px; }
+#medal-wrap {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+}
+#medal {
+  width: 84px;
+  height: 84px;
+  opacity: 1;
+}
+#medal-wrap.waiting #medal { opacity: 0; }
+#medal-wrap.reveal #medal { animation: medal-spin-in 0.52s cubic-bezier(0.2, 0.85, 0.3, 1.15) both; }
+#medal-wrap.earned.reveal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 38%, rgba(255, 255, 255, 0.75) 50%, transparent 62%);
+  clip-path: circle(34% at 50% 55%);
+  animation: medal-shine 0.5s 0.28s ease-out both;
+}
+@keyframes medal-spin-in {
+  from { opacity: 0; transform: rotateY(90deg) scale(0.72); }
+  to { opacity: 1; transform: rotateY(0) scale(1); }
+}
+@keyframes medal-shine {
+  from { opacity: 0; transform: translateX(-110%) skewX(-20deg); }
+  20% { opacity: 1; }
+  to { opacity: 0; transform: translateX(110%) skewX(-20deg); }
+}
 #go-nums {
   display: grid;
   grid-template-columns: auto auto;
@@ -282,6 +376,13 @@ html, body {
   text-align: right;
 }
 #go-score { color: var(--sun); font-size: 38px; }
+
+#best-delta {
+  min-height: 1em;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffd970;
+}
 
 #medal-line {
   min-height: 1em;
@@ -408,4 +509,23 @@ html, body {
 @media (min-width: 700px) {
   #go-card { padding: 22px 26px 18px; }
   .lb ol { max-height: 30vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l-champ i,
+  #hint,
+  #score.pop,
+  .score-floater,
+  #milestone-banner.show,
+  #medal-wrap.reveal #medal,
+  #medal-wrap.earned.reveal::after {
+    animation: none;
+  }
+  #milestone-banner.show {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  .score-floater { display: none; }
+  #medal-wrap.waiting #medal,
+  #medal-wrap.reveal #medal { opacity: 1; }
 }

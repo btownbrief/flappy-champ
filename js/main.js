@@ -78,10 +78,19 @@ let splashes = [];
 let deadInWater = false;
 let overShownAt = 0;
 let lastT = performance.now();
+let runId = 0;
+let milestoneTimer = 0;
 
 const hud = $('hud'), scoreEl = $('score'), hintEl = $('hint');
 const menuEl = $('menu'), gameoverEl = $('gameover');
 const bestLineEl = $('best-line');
+const effectLayer = $('effect-layer'), milestoneEl = $('milestone-banner');
+const announcerEl = $('announcer'), medalWrapEl = $('medal-wrap');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function motionOK() {
+  return !reduceMotion.matches;
+}
 
 function difficulty() {
   const lvl = Math.min(score / T.rampAt, 1);
@@ -92,6 +101,7 @@ function difficulty() {
 }
 
 function resetRun() {
+  runId++;
   champY = playH * 0.42;
   vy = 0;
   tilt = 0;
@@ -102,6 +112,13 @@ function resetRun() {
   shake = 0;
   deadInWater = false;
   scoreEl.textContent = '0';
+  scoreEl.classList.remove('pop');
+  clearTimeout(milestoneTimer);
+  milestoneEl.classList.remove('show');
+  milestoneEl.textContent = '';
+  effectLayer.querySelectorAll('.score-floater').forEach((el) => el.remove());
+  medalWrapEl.className = '';
+  announcerEl.textContent = '';
 }
 
 function toReady() {
@@ -149,6 +166,8 @@ function spawnObstacle(x) {
     gapH: gap,
     w: obW,
     passed: false,
+    near: false,
+    nearEdgeY: 0,
     v: VARIANTS[Math.floor(Math.random() * VARIANTS.length)],
   });
 }
@@ -175,6 +194,78 @@ function champHits(ob) {
     if (circleRectHit(px, py, pr, x0, bot, x1, waterY + 50)) return true;
   }
   return false;
+}
+
+function tightPassEdge(ob) {
+  const s = champS;
+  const top = ob.gapY - ob.gapH / 2 - 3;
+  const bot = ob.gapY + ob.gapH / 2 + 3;
+  const pts = [
+    [champY - s * 0.55, s * 0.66],
+    [champY + s * 0.3, s * 0.6],
+  ];
+  let closest = { clearance: Infinity, y: 0 };
+  for (const [py, pr] of pts) {
+    const edges = [
+      { clearance: py - pr - top, y: top },
+      { clearance: bot - (py + pr), y: bot },
+    ];
+    for (const edge of edges) {
+      if (edge.clearance < closest.clearance) closest = edge;
+    }
+  }
+  return closest;
+}
+
+function addParticle(p) {
+  if (!motionOK()) return;
+  if (splashes.length >= 40) splashes.shift();
+  splashes.push(p);
+}
+
+function emitSparkles(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = playH * (0.035 + Math.random() * 0.09);
+    addParticle({
+      kind: 'spark',
+      color,
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: 2 + Math.random() * 2,
+      life: 0.38 + Math.random() * 0.18,
+    });
+  }
+}
+
+function showFloater(text, x, y, tight = false) {
+  if (!motionOK()) return;
+  const token = runId;
+  const el = document.createElement('div');
+  el.className = `score-floater${tight ? ' tight' : ''}`;
+  el.textContent = text;
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  effectLayer.appendChild(el);
+  const remove = () => el.remove();
+  el.addEventListener('animationend', remove, { once: true });
+  setTimeout(() => { if (runId === token) remove(); }, 750);
+}
+
+function showMilestone(medal) {
+  clearTimeout(milestoneTimer);
+  milestoneEl.classList.remove('show');
+  milestoneEl.textContent = `${medal.emoji} ${medal.name.toUpperCase()} · ${medal.at}`;
+  void milestoneEl.offsetWidth;
+  milestoneEl.classList.add('show');
+  announcerEl.textContent = `${medal.name} medal reached at ${medal.at}!`;
+  sound.fanfare();
+  const token = runId;
+  milestoneTimer = setTimeout(() => {
+    if (runId === token) milestoneEl.classList.remove('show');
+  }, 1300);
 }
 
 /* ============================== update ============================== */
@@ -228,23 +319,48 @@ function update(dt) {
     for (const ob of obstacles) {
       if (!ob.passed && ob.x + ob.w < champX - champR) {
         ob.passed = true;
+        const before = score;
         score++;
+        emitSparkles(champX + champS, champY, 5, '#f6efdc');
+        showFloater('+1', champX + champS * 1.4, champY - champS);
+        const edge = tightPassEdge(ob);
+        const tight = ob.near || (edge.clearance >= 0 && edge.clearance <= Math.max(6, champS * 0.38));
+        if (tight) {
+          score++;
+          const edgeY = ob.near ? ob.nearEdgeY : edge.y;
+          emitSparkles(champX, edgeY, 5, '#ffd970');
+          showFloater('TIGHT +1', champX, edgeY, true);
+          announcerEl.textContent = 'Tight pass bonus, plus one!';
+          sound.nearMiss();
+        }
         scoreEl.textContent = String(score);
         scoreEl.classList.remove('pop');
         void scoreEl.offsetWidth;
         scoreEl.classList.add('pop');
-        sound.score();
+        const milestone = MEDALS.find((m) => before < m.at && score >= m.at);
+        if (milestone) showMilestone(milestone);
+        else sound.score();
       }
     }
 
     // collisions
     for (const ob of obstacles) {
-      if (Math.abs(ob.x - champX) < ob.w + champS * 3 && champHits(ob)) {
-        sound.thunk();
-        shake = 1;
-        state = 'dying';
-        vy = Math.min(vy, -playH * 0.25); // little bounce off the sail
-        break;
+      const proximity = Math.abs(ob.x - champX);
+      if (proximity < ob.w + champS * 1.25 + 4) {
+        const edge = tightPassEdge(ob);
+        if (edge.clearance >= 0 && edge.clearance <= Math.max(6, champS * 0.38)) {
+          ob.near = true;
+          ob.nearEdgeY = edge.y;
+        }
+      }
+      if (proximity < ob.w + champS * 3) {
+        if (champHits(ob)) {
+          sound.thunk();
+          if (motionOK()) shake = 1;
+          state = 'dying';
+          vy = Math.min(vy, -playH * 0.25); // little bounce off the sail
+          break;
+        }
       }
     }
   }
@@ -254,9 +370,10 @@ function update(dt) {
     deadInWater = true;
     champY = waterY - champS * 0.5;
     sound.splash();
-    shake = Math.max(shake, 0.7);
+    if (motionOK()) shake = Math.max(shake, 0.7);
     for (let i = 0; i < 22; i++) {
-      splashes.push({
+      addParticle({
+        kind: 'drop',
         x: champX + (Math.random() - 0.5) * champS * 3,
         y: waterY + Math.random() * 4,
         vx: (Math.random() - 0.5) * playH * 0.6,
@@ -266,13 +383,14 @@ function update(dt) {
       });
     }
     if (state === 'play') state = 'dying';
-    setTimeout(gameOver, 620);
+    const token = runId;
+    setTimeout(() => { if (runId === token) gameOver(); }, 620);
   }
 
   // splash droplets
   for (const p of splashes) {
     p.life -= dt;
-    p.vy += playH * 2.6 * dt;
+    p.vy += playH * (p.kind === 'spark' ? 0.12 : 2.6) * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
   }
@@ -292,7 +410,7 @@ function render(time) {
   const pal = palette(dayT);
 
   ctx.save();
-  if (shake > 0.01) {
+  if (motionOK() && shake > 0.01) {
     ctx.translate((Math.random() - 0.5) * shake * 14, (Math.random() - 0.5) * shake * 14);
   }
 
@@ -317,12 +435,21 @@ function render(time) {
 
   // splash droplets
   if (splashes.length) {
-    ctx.fillStyle = pal.wave;
     for (const p of splashes) {
       ctx.globalAlpha = Math.min(1, p.life * 2.4);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, 7);
-      ctx.fill();
+      ctx.fillStyle = p.color || pal.wave;
+      if (p.kind === 'spark') {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-p.r / 2, -p.r * 2, p.r, p.r * 4);
+        ctx.fillRect(-p.r * 2, -p.r / 2, p.r * 4, p.r);
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, 7);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -405,30 +532,66 @@ function drawMedal(s) {
   }
 }
 
+function revealMedal(medal, celebrate, token) {
+  if (runId !== token || state !== 'over') return;
+  medalWrapEl.classList.remove('waiting');
+  medalWrapEl.classList.toggle('earned', !!medal);
+  medalWrapEl.classList.add('reveal');
+  if (celebrate) sound.fanfare();
+}
+
+function countUpScore(target, token, done) {
+  const el = $('go-score');
+  if (!motionOK() || target <= 0) {
+    el.textContent = String(target);
+    done();
+    return;
+  }
+  const start = performance.now();
+  const duration = Math.min(650, 260 + target * 18);
+  function tick(now) {
+    if (runId !== token || state !== 'over') return;
+    const progress = Math.min(1, (now - start) / duration);
+    el.textContent = String(Math.round(target * (1 - (1 - progress) ** 3)));
+    if (progress < 1) requestAnimationFrame(tick);
+    else done();
+  }
+  requestAnimationFrame(tick);
+}
+
 function gameOver() {
   if (state === 'over') return;
   state = 'over';
   sound.gameover();
   const s = score;
+  const previousBest = best;
   const isBest = s > best;
   if (isBest) {
     best = s;
     localStorage.setItem(LS_BEST, String(best));
   }
-  $('go-score').textContent = s;
+  $('go-score').textContent = '0';
   $('go-best').textContent = best;
   const goTitle = $('go-title');
   goTitle.textContent = isBest ? 'NEW BEST!' : 'SPLASHED!';
   goTitle.className = isBest ? 'new-best' : '';
   const medal = medalFor(s);
+  $('best-delta').textContent = isBest
+    ? previousBest > 0 ? `Beat your best by ${s - previousBest}!` : 'Your first best is on the board!'
+    : '';
   $('medal-line').textContent = medal
     ? medal.line
     : s > 0 ? `${MEDALS[MEDALS.length - 1].at - s} more for a medal` : 'Even Champ has off days.';
   drawMedal(s);
-  if (medal || isBest) sound.fanfare();
+  medalWrapEl.className = 'waiting';
   hud.classList.add('hidden');
   overShownAt = performance.now();
   gameoverEl.classList.remove('hidden');
+  $('retryBtn').focus({ preventScroll: true });
+  const token = runId;
+  countUpScore(s, token, () => {
+    setTimeout(() => revealMedal(medal, medal || isBest, token), motionOK() ? 90 : 0);
+  });
   updateLeaderboard(s); // submits exactly once, right here
 }
 

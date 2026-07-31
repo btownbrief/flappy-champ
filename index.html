@@ -30,6 +30,10 @@
     <div id="score">0</div>
     <div id="hint">TAP TO FLAP</div>
   </div>
+  <div id="effect-layer" aria-hidden="true">
+    <div id="milestone-banner"></div>
+  </div>
+  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
 
   <button id="mute" aria-label="Toggle sound">🔊</button>
 
@@ -61,7 +65,9 @@
       <div id="go-card">
         <div id="go-title">SPLASHED!</div>
         <div id="go-row">
-          <canvas id="medal" width="150" height="150" aria-hidden="true"></canvas>
+          <div id="medal-wrap" aria-hidden="true">
+            <canvas id="medal" width="150" height="150"></canvas>
+          </div>
           <div id="go-nums">
             <div class="go-label">SCORE</div>
             <div id="go-score">0</div>
@@ -69,6 +75,7 @@
             <div id="go-best">0</div>
           </div>
         </div>
+        <div id="best-delta"></div>
         <div id="medal-line"></div>
 
         <div class="lb hidden" id="lb">
